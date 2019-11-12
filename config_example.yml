@@ -1,0 +1,11 @@
+bot:
+  endpoint: subj
+  token: subj
+commands:
+  start: start
+  stop: stop
+  get_mentions: mentions
+  get_groups: subscriptions
+  set_reminder: schedule
+  help: commands
+timezone: 0300
