@@ -2,6 +2,7 @@ import json
 import os
 import threading
 from datetime import datetime
+import i18n
 
 import grpc
 from dialog_api import messaging_pb2, sequence_and_updates_pb2, peers_pb2, groups_pb2
@@ -15,6 +16,9 @@ from Users import User
 HOURS = {}
 MINUTES = {}
 MAGIC_CONST = 1000
+PHRASES = 'phrases.phrases'
+MEDIA = 'phrases.media'
+LOCALES = ['en', 'ru']
 
 for i in range(25):
     HOURS[str(i)] = str(i)
@@ -26,6 +30,7 @@ class Bot:
     def __init__(self, config):
         bot = config["bot"]
         self.commands = config["commands"]
+        self.locale = config["lang"]
         self.timezone = config["timezone"]
         self.bot = DialogBot.get_secure_bot(
             bot["endpoint"],
@@ -40,7 +45,7 @@ class Bot:
     def cron(self):
         ticker = threading.Event()
         while not ticker.wait(self.cron_time):
-            t = datetime.now(datetime.strptime("+0300", "%z").tzinfo)
+            t = datetime.utcnow()
             self.cron_time = 60 - int(t.strftime("%S"))
             time = t.strftime("%H:%M")
             if time in self.reminder:
@@ -52,51 +57,56 @@ class Bot:
         message = params[0].message
         sender_id = params[0].sender_uid
         text = message.textMessage.text
-        service = params[0].message.serviceMessage
+        service = params[0].message.serviceMessage.ext
         peer = params[0].peer
+
         if service:
             self.processing_service_message(service, sender_id, peer)
         if not text:
             return
         if peer.type == 2:
             self.check_mention_in_message(message.textMessage, peer.id, params[0].mid)
-        elif text == self.commands["start"]:
-            if peer.id not in self.tracked_users:
-                self.add_tracked_user(peer)
-                self.bot.messaging.send_message(peer, "Tracking start.")
-            else:
-                self.bot.messaging.send_message(peer, "I'm already track yours mentions.")
-        elif text == self.commands["stop"]:
-            if peer.id in self.tracked_users:
-                self.drop_remind(peer.id)
-                self.tracked_users.pop(peer.id)
-                self.bot.messaging.send_message(peer, "Tracking stop.")
-            else:
-                self.bot.messaging.send_message(peer, "I didn't track yours mentions.")
-        elif text == self.commands["get_mentions"]:
-            if peer.id in self.tracked_users:
-                self.send_mentions_for_user(peer)
-                self.tracked_users[peer.id].mentions = {}
-            else:
-                self.bot.messaging.send_message(peer, 'I didn\'t track yours mentions. Send "{}" to start '
-                                                      'tracking.'.format(self.commands["start"]))
-        elif text == self.commands["get_groups"]:
-            if peer.id in self.tracked_users:
-                self.get_tracked_groups_for_user(peer)
-            else:
-                self.bot.messaging.send_message(peer, 'I didn\'t track yours mentions. Send "{0}" to start '
-                                                      'tracking.'.format(self.commands["start"]))
-        elif text == self.commands["set_reminder"]:
-            if peer.id in self.tracked_users:
-                self.bot.messaging.send_message(peer, "Set reminder time:", self.interactive_reminder())
-            else:
-                self.bot.messaging.send_message(peer, 'I didn\'t track yours mentions. Send "{0}" to start '
-                                                      'tracking.'.format(self.commands["start"]))
-        elif text == self.commands["help"]:
-            self.get_commands(peer)
         else:
-            self.bot.messaging.send_message(peer, 'Unknown command. Send "{}" to get a list of commands.'
-                                            .format(self.commands['help']))
+
+            lang = self.get_lang(peer.id)
+            if text == self.commands["start"]:
+                if peer.id not in self.tracked_users:
+                    self.add_tracked_user(peer)
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.start', locale=lang))
+                else:
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.already', locale=lang))
+            elif text == self.commands["stop"]:
+                if peer.id in self.tracked_users:
+                    self.drop_remind(peer.id)
+                    self.tracked_users.pop(peer.id)
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.stop', locale=lang))
+                else:
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.not tracking', locale=lang))
+            elif text == self.commands["get_mentions"]:
+                if peer.id in self.tracked_users:
+                    self.send_mentions_for_user(peer)
+                    self.tracked_users[peer.id].mentions = {}
+                else:
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.not tracking opt', locale=lang)
+                                                    .format(self.commands["start"]))
+            elif text == self.commands["get_groups"]:
+                if peer.id in self.tracked_users:
+                    self.get_tracked_groups_for_user(peer)
+                else:
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.not tracking opt', locale=lang)
+                                                    .format(self.commands["start"]))
+            elif text == self.commands["set_reminder"]:
+                if peer.id in self.tracked_users:
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.set time', locale=lang),
+                                                    self.interactive_reminder(lang))
+                else:
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.not tracking opt', locale=lang)
+                                                    .format(self.commands["start"]))
+            elif text == self.commands["help"]:
+                self.get_commands(peer, lang)
+            else:
+                self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.unknown', locale=lang)
+                                                .format(self.commands['help']))
 
     def on_event(self, *params):
         uid = params[0].uid
@@ -112,14 +122,10 @@ class Bot:
         elif params[0].id == "minutes":
             self.on_select(peer, params[0].mid, msg, "", which_button)
 
-    def get_commands(self, peer):
-        text = '"{0}": subscribe on tracking your mentions,\n' \
-               '"{1}": unsubscribe your tracking,\n' \
-               '"{2}": get your mentions since "{0}" or last reminder or last used this option,\n' \
-               '"{3}": set reminder which will remind about your mentions every day in due time,\n' \
-               '"{4}": get groups to which I am subscribed for you can subscribe/unsubscribe on them'\
-            .format(self.commands["start"], self.commands["stop"], self.commands["get_mentions"],
-                    self.commands["set_reminder"], self.commands["get_groups"])
+    def get_commands(self, peer, lang):
+        text = i18n.t(PHRASES + '.commands', locale=lang).format(self.commands["start"], self.commands["stop"],
+                                                    self.commands["get_mentions"], self.commands["set_reminder"],
+                                                    self.commands["get_groups"])
         return self.bot.messaging.send_message(peer, text)
 
     def start(self):
@@ -184,6 +190,7 @@ class Bot:
         return result
 
     def get_tracked_groups_for_user(self, peer):
+        lang = self.get_lang(peer.id)
         while self.tracked_users[peer.id].buttons_mids:
             message = self.bot.messaging.get_messages_by_id([self.tracked_users[peer.id].buttons_mids.pop()])[0]
             self.bot.messaging.update_message(message, message.message.textMessage.text)
@@ -191,45 +198,47 @@ class Bot:
             if peer.id not in group.user_ids:
                 continue
             if id_ in self.tracked_users[peer.id].groups:
-                interactive = self.interactive_stop(id_)
+                interactive = self.interactive_stop(id_, lang)
             else:
-                interactive = self.interactive_start(id_)
+                interactive = self.interactive_start(id_, lang)
             self.tracked_users[peer.id].buttons_mids.append(
                 self.bot.messaging.send_message(peer, self.get_shortname_or_url_group(group), interactive).message_id)
 
     @staticmethod
-    def interactive_stop(gid):
+    def interactive_stop(gid, lang):
         return [interactive_media.InteractiveMediaGroup(
             [
                 interactive_media.InteractiveMedia(
                     gid,
-                    interactive_media.InteractiveMediaButton("Stop", "Stop tracking")
+                    interactive_media.InteractiveMediaButton("Stop", i18n.t(MEDIA + '.stop tracking', locale=lang))
                 ),
             ]
         )]
 
     @staticmethod
-    def interactive_start(gid):
+    def interactive_start(gid, lang):
         return [interactive_media.InteractiveMediaGroup(
             [
                 interactive_media.InteractiveMedia(
                     gid,
-                    interactive_media.InteractiveMediaButton("Start", "Start tracking")
+                    interactive_media.InteractiveMediaButton("Start", i18n.t(MEDIA + '.start tracking', locale=lang))
                 ),
             ]
         )]
 
     @staticmethod
-    def interactive_reminder():
+    def interactive_reminder(lang):
         return [interactive_media.InteractiveMediaGroup(
             [
                 interactive_media.InteractiveMedia(
                     "hours",
-                    interactive_media.InteractiveMediaSelect(HOURS, "Hour", "Hour")
+                    interactive_media.InteractiveMediaSelect(HOURS, i18n.t(MEDIA + '.hour', locale=lang),
+                                                             i18n.t(MEDIA + '.hour', locale=lang))
                 ),
                 interactive_media.InteractiveMedia(
                     "minutes",
-                    interactive_media.InteractiveMediaSelect(MINUTES, "Minute", "Minute")
+                    interactive_media.InteractiveMediaSelect(MINUTES, i18n.t(MEDIA + '.minute', locale=lang),
+                                                             i18n.t(MEDIA + '.minute', locale=lang))
                 ),
             ]
         )]
@@ -243,8 +252,9 @@ class Bot:
 
     def send_mentions_for_user(self, peer):
         user = self.tracked_users[peer.id]
+        lang = self.get_lang(peer.id)
         if not user.mentions:
-            self.bot.messaging.send_message(peer, "You have not mentions.")
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.no mentions', locale=lang))
         for group_id, mids in user.mentions.items():
             group = self.default_tracked_groups[group_id]
             self.bot.messaging.forward(peer, mids, self.get_shortname_or_url_group(group))
@@ -260,37 +270,37 @@ class Bot:
     def on_click_start(self, event_id, peer, msg):
         uid = peer.id
         text = msg.message.textMessage.text
+        lang = self.get_lang(uid)
         if uid not in self.tracked_users:
-            self.bot.messaging.send_message(peer, "Oops. You unsubscribed on track mentions. Send '{}' for subscribe."
-                                            .format(self.commands["start"]))
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.oops', locale=lang).format(self.commands["start"]))
             self.bot.messaging.update_message(msg, text)
             return
         group = self.default_tracked_groups[event_id]
         if event_id not in self.tracked_users[uid].groups:
             self.tracked_users[uid].groups.add(event_id)
-            self.bot.messaging.send_message(peer, "Start tracking group {} for you.".format(
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.start group', locale=lang).format(
                 self.get_shortname_or_url_group(group)
             ))
         else:
-            self.bot.messaging.send_message(peer, "Group already track.")
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.already group', locale=lang))
         self.bot.messaging.update_message(msg, text)
 
     def on_click_stop(self, event_id, peer, msg):
         uid = peer.id
         text = msg.message.textMessage.text
+        lang = self.get_lang(uid)
         if uid not in self.tracked_users:
-            self.bot.messaging.send_message(peer, "Oops. You unsubscribed on track mentions. Send '{}' for subscribe."
-                                            .format(self.commands["start"]))
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.oops', locale=lang).format(self.commands["start"]))
             self.bot.messaging.update_message(msg, text)
             return
         group = self.default_tracked_groups[event_id]
         if event_id in self.tracked_users[uid].groups:
             self.tracked_users[uid].groups.remove(event_id)
-            self.bot.messaging.send_message(peer, "Stop tracking group {} for you.".format(
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.stop group', locale=lang).format(
                 self.get_shortname_or_url_group(group)
             ))
         else:
-            self.bot.messaging.send_message(peer, "I didn't track yours mentions in {}.".format(
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.not trackind group', locale=lang).format(
                 self.get_shortname_or_url_group(group)
             ))
         self.bot.messaging.update_message(msg, text)
@@ -298,9 +308,10 @@ class Bot:
     def on_select(self, peer, mid, msg, hour, minute):
         uid = peer.id
         text = msg.message.textMessage.text
+        lang = self.get_lang(uid)
+        timezone = self.get_timezone(uid)
         if uid not in self.tracked_users:
-            self.bot.messaging.send_message(peer, "Oops. You unsubscribed on track mentions. Send '{}' for subscribe."
-                                            .format(self.commands["start"]))
+            self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.oops', locale=lang).format(self.commands["start"]))
             self.bot.messaging.update_message(msg, text)
             return
         for remind in self.tracked_users[uid].reminder:
@@ -317,21 +328,21 @@ class Bot:
                         hour = "0" * (2 - len(hour)) + hour
 
                     time = "{0}:{1}".format(hour, minute)
+                    utc_time = self.get_utc_time(hour, minute, timezone)
 
-                    if time in self.reminder:
-                        self.reminder[time].append(uid)
+                    if utc_time in self.reminder:
+                        self.reminder[utc_time].append(uid)
                     else:
-                        self.reminder[time] = [uid]
+                        self.reminder[utc_time] = [uid]
                     for reminder in self.tracked_users[uid].reminder:
                         mid = reminder[0]
                         message = self.bot.messaging.get_messages_by_id([mid])[0]
                         self.bot.messaging.update_message(message, message.message.textMessage.text)
                     self.tracked_users[uid].reminder = []
                     self.drop_remind(uid)
-                    self.tracked_users[uid].remind_time = time
+                    self.tracked_users[uid].remind_time = utc_time
                     self.bot.messaging.update_message(msg, text)
-                    self.bot.messaging.send_message(peer, "I will remind you of yours mentions at {} every day."
-                                                    .format(time))
+                    self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.remind', locale=lang).format(time))
                 elif hour:
                     remind[1] = "0" * (2 - len(hour)) + hour
                 else:
@@ -340,8 +351,9 @@ class Bot:
         self.tracked_users[uid].reminder.append((mid, hour, minute))
 
     def processing_service_message(self, service_msg, sender_id, peer):
-        if "User kicked the group" == service_msg.text:
-            kick = service_msg.ext.userKicked.kicked_uid
+        _type = str(service_msg).split(' ')[0]
+        if "userKicked" == _type:
+            kick = service_msg.userKicked.kicked_uid
             if kick == self.bot.user_info.user.id:
                 self.default_tracked_groups.pop(peer.id)
             else:
@@ -349,7 +361,7 @@ class Bot:
                     self.default_tracked_groups[peer.id].user_ids.remove(kick)
                 if kick in self.tracked_users and peer.id in self.tracked_users[kick].groups:
                     self.tracked_users[kick].groups.remove(peer.id)
-        elif 'User joined the group' == service_msg.text:
+        elif 'userJoined' == _type:
             if peer.id in self.default_tracked_groups:
                 self.default_tracked_groups[peer.id].user_ids.add(sender_id)
                 if sender_id in self.tracked_users:
@@ -359,7 +371,7 @@ class Bot:
                 for group in groups:
                     if group.id == peer.id:
                         self.default_tracked_groups[peer.id] = self.get_group(group)
-        elif "User left the group" == service_msg.text:
+        elif 'userLeft' == _type:
             if sender_id in self.tracked_users:
                 if peer.id in self.tracked_users[sender_id].groups:
                     self.tracked_users[sender_id].groups.remove(sender_id)
@@ -388,3 +400,25 @@ class Bot:
                 self.reminder[last_time].remove(uid)
                 if not self.reminder[last_time]:
                     self.reminder.pop(last_time)
+
+    def get_lang(self, uid):
+        user = self.bot.users.get_user_by_id(uid)
+        locales = user.data.locales
+        if not locales or locales[0] not in LOCALES:
+            return self.locale
+        else:
+            return locales[0]
+
+    def get_timezone(self, uid):
+        user = self.bot.users.get_user_by_id(uid)
+        timezone = user.data.time_zone
+        if not timezone:
+            timezone = self.timezone
+        return timezone
+
+    @staticmethod
+    def get_utc_time(hour, minute, timezone):
+        time = "{0}:{1}".format(hour, minute)
+        loc = datetime.strptime(time + timezone, "%H:%M%z")
+        utc = datetime.strptime(time + "+0000", "%H:%M%z")
+        return (loc + (loc - utc)).strftime("%H:%M")

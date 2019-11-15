@@ -8,4 +8,5 @@ commands:
   get_groups: subscriptions
   set_reminder: schedule
   help: commands
-timezone: 0300
+timezone: +0300
+lang: ru

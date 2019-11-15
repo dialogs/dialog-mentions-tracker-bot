@@ -8,6 +8,7 @@ verify_ssl = true
 [packages]
 pyyaml = "==5.1.2"
 dialog-bot-sdk = "==2.3.0rc13"
+python-i18n = {extras = ["yaml"],version = "==0.3.7"}
 
 [requires]
 python_version = "3.7"

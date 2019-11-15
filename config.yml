@@ -9,3 +9,4 @@ commands:
   set_reminder: schedule
   help: commands
 timezone: +0300
+lang: ru

@@ -4,11 +4,11 @@ dialog-mentions-tracker-bot
 
 Config
 -
-bot - for start bot
+bot - to start bot
 - token
 - endpoint
 
-commands - what will be called bot's commands on client 
+commands - command that the bot has
 - start
 - stop
 - get_mentions

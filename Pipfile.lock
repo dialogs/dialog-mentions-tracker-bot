@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "73d4f689048ad0ab8bff3709802a6055c523f8929e1a67ac1efe57944ca890ec"
+            "sha256": "9581b07b7e9bc3c3d200f217dfba70f5f726b5c7ffa2914d5ce06e12272cccc5"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -159,10 +159,10 @@
         },
         "google-auth": {
             "hashes": [
-                "sha256:8b67e34a07055b9785948ff9d3e044f93be9019f4f69711b04450087ae150817",
-                "sha256:cf60c71698f90177e044c8df1e2915a6da372a99d2af0e236d76c426aaf4f114"
+                "sha256:84105be98837fb8436e9d0bcb7a279fd85fa1d97bb35a077e70ba2fb95bcc983",
+                "sha256:baf1b3f8b29a5f96f66753ad848473699322b63f4d68964e510554b12d002443"
             ],
-            "version": "==1.7.0"
+            "version": "==1.7.1"
         },
         "google-auth-httplib2": {
             "hashes": [
@@ -426,6 +426,17 @@
                 "sha256:c727930ad54b10fc157015014b666f2d8b41f70c0d03e83ab67624fd3dd5d1e6"
             ],
             "version": "==19.0.0"
+        },
+        "python-i18n": {
+            "extras": [
+                "yaml"
+            ],
+            "hashes": [
+                "sha256:095cb67a449f9caaddb4ca034255dcb442b1d1aca874294eda537bb5ea919892",
+                "sha256:85954be9c16b53221b42ebdf5164d6e6fef80f2dd0e388c7a468687330bba1d3"
+            ],
+            "index": "pypi",
+            "version": "==0.3.7"
         },
         "pyyaml": {
             "hashes": [
