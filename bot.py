@@ -14,7 +14,7 @@ from Users import User
 
 HOURS = {}
 MINUTES = {}
-MAGIC_CONST = 1000
+GROUPS_MEMBERS_FETCH_LIMIT = 1000
 PHRASES = 'phrases.phrases'
 MEDIA = 'phrases.media'
 LOCALES = ['en', 'ru']
@@ -248,7 +248,7 @@ class Bot:
         )]
 
     def get_user_ids_in_group(self, peer):
-        members = self.bot.groups.load_members(peer, MAGIC_CONST)
+        members = self.bot.groups.load_members(peer, GROUPS_MEMBERS_FETCH_LIMIT)
         users = set()
         for member in members.users:
             users.add(member.id)
