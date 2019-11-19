@@ -1,5 +1,3 @@
-import json
-import threading
 import i18n
 
 from bot import Bot
@@ -21,22 +19,8 @@ def config_validate(cfg):
         raise Exception("Config has no timezone configuration")
     if "lang" not in cfg:
         raise Exception("Config has no lang configuration")
-
-
-def backup_users(users):
-    res = {}
-    for id_, data in users.items():
-        res[id_] = list(data.groups)
-    return res
-
-
-def backup():
-    with open(os.path.dirname(__file__) + '/backup/reminder.json', 'w') as f:
-        json.dump(bot.reminder, f)
-    with open(os.path.dirname(__file__) + '/backup/tracked_users.json', 'w') as f:
-        tracked_users = backup_users(bot.tracked_users)
-        json.dump(tracked_users, f)
-    print('backup complete')
+    if "database" not in cfg:
+        raise Exception("Config has no database configuration")
 
 
 if __name__ == '__main__':
@@ -46,8 +30,5 @@ if __name__ == '__main__':
     config_validate(config)
     bot = Bot(config)
 
-    try:
-        bot.start()
-    except:
-        backup()
-        raise Exception("Bot is dead")
+    bot.start()
+

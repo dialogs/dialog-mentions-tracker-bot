@@ -1,9 +1,8 @@
-import json
 import os
 import threading
 from datetime import datetime
 import i18n
-
+import sqlite3
 import grpc
 from dialog_api import messaging_pb2, sequence_and_updates_pb2, peers_pb2, groups_pb2
 from dialog_bot_sdk import interactive_media
@@ -29,6 +28,8 @@ for i in range(60):
 class Bot:
     def __init__(self, config):
         bot = config["bot"]
+        self.connect = sqlite3.connect(os.path.dirname(__file__) + config["database"], check_same_thread=False)
+        self.cursor = self.connect.cursor()
         self.commands = config["commands"]
         self.locale = config["lang"]
         self.timezone = config["timezone"]
@@ -129,7 +130,7 @@ class Bot:
         return self.bot.messaging.send_message(peer, text)
 
     def start(self):
-        self.preprocessing_from_backup()
+        self.preprocessing_from_database()
         self.get_default_groups()
         self.bot.messaging.on_message_async(self.on_msg, self.on_event)
         self.cron()
@@ -181,6 +182,9 @@ class Bot:
 
     def add_tracked_user(self, peer):
         self.tracked_users[peer.id] = User(self.bot.manager.get_outpeer(peer), self.get_default_groups_for_user(peer))
+        for group_id in self.tracked_users[peer.id].groups:
+            self.cursor.execute("INSERT INTO users values (?, ?)", [peer.id, group_id])
+            self.connect.commit()
 
     def get_default_groups_for_user(self, peer):
         result = set()
@@ -278,6 +282,8 @@ class Bot:
         group = self.default_tracked_groups[event_id]
         if event_id not in self.tracked_users[uid].groups:
             self.tracked_users[uid].groups.add(event_id)
+            self.cursor.execute("INSERT INTO users values (?, ?)", [peer.id, event_id])
+            self.connect.commit()
             self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.start group', locale=lang).format(
                 self.get_shortname_or_url_group(group)
             ))
@@ -296,6 +302,8 @@ class Bot:
         group = self.default_tracked_groups[event_id]
         if event_id in self.tracked_users[uid].groups:
             self.tracked_users[uid].groups.remove(event_id)
+            self.cursor.execute("DELETE FROM users WHERE uid={0} and gid={1}".format(uid, event_id))
+            self.connect.commit()
             self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.stop group', locale=lang).format(
                 self.get_shortname_or_url_group(group)
             ))
@@ -334,12 +342,15 @@ class Bot:
                         self.reminder[utc_time].append(uid)
                     else:
                         self.reminder[utc_time] = [uid]
+
                     for reminder in self.tracked_users[uid].reminder:
                         mid = reminder[0]
                         message = self.bot.messaging.get_messages_by_id([mid])[0]
                         self.bot.messaging.update_message(message, message.message.textMessage.text)
                     self.tracked_users[uid].reminder = []
                     self.drop_remind(uid)
+                    self.cursor.execute("INSERT INTO reminder values (?, ?)", [utc_time, uid])
+                    self.connect.commit()
                     self.tracked_users[uid].remind_time = utc_time
                     self.bot.messaging.update_message(msg, text)
                     self.bot.messaging.send_message(peer, i18n.t(PHRASES + '.remind', locale=lang).format(time))
@@ -378,26 +389,42 @@ class Bot:
                 if sender_id in self.default_tracked_groups[peer.id].users:
                     self.default_tracked_groups[peer.id].users.remove(sender_id)
 
-    def preprocessing_from_backup(self):
-        if os.path.exists(os.path.dirname(__file__) + '/backup/reminder.json'):
-            with open(os.path.dirname(__file__) + '/backup/reminder.json') as reminder:
-                self.reminder = json.load(reminder)
-        if os.path.exists(os.path.dirname(__file__) + '/backup/tracked_users.json'):
-            with open(os.path.dirname(__file__) + '/backup/tracked_users.json') as tracked_users:
-                tracked = json.load(tracked_users)
-                for id_, groups in tracked.items():
-                    peer = peers_pb2.Peer(type=peers_pb2.PEERTYPE_PRIVATE, id=int(id_))
-                    self.tracked_users[int(id_)] = User(self.bot.manager.get_outpeer(peer), set(groups))
-        if self.tracked_users and self.reminder:
-            for time, ids in self.reminder.items():
-                for id_ in ids:
-                    self.tracked_users[id_].remind_time = time
+    def preprocessing_from_database(self):
+        try:
+            self.cursor.execute("CREATE TABLE users (uid integer, gid integer)")
+            self.connect.commit()
+        except:
+            print("Table 'users' already exist")
+            self.cursor.execute("SELECT * FROM users")
+            users = self.cursor.fetchall()
+            for user in users:
+                if user[0] not in self.tracked_users:
+                    peer = peers_pb2.Peer(type=peers_pb2.PEERTYPE_PRIVATE, id=user[0])
+                    self.tracked_users[user[0]] = User(self.bot.manager.get_outpeer(peer),
+                                                       [user[1]])
+                else:
+                    self.tracked_users[user[0]].groups.append(user[1])
+        try:
+            self.cursor.execute("CREATE TABLE reminder (time text, uid integer)")
+            self.connect.commit()
+        except:
+            print("Table 'reminder' already exist")
+            self.cursor.execute("SELECT * FROM reminder")
+            reminder = self.cursor.fetchall()
+            for remind in reminder:
+                if remind[0] in self.reminder:
+                    self.reminder[remind[0]].append(remind[1])
+                else:
+                    self.reminder[remind[0]] = [remind[1]]
+                self.tracked_users[remind[1]].remind_time = remind[0]
 
     def drop_remind(self, uid):
         if self.tracked_users[uid].remind_time is not None:
             last_time = self.tracked_users[uid].remind_time
             if uid in self.reminder[last_time]:
                 self.reminder[last_time].remove(uid)
+                self.cursor.execute("DELETE FROM reminder WHERE uid={}".format(uid))
+                self.connect.commit()
                 if not self.reminder[last_time]:
                     self.reminder.pop(last_time)
 

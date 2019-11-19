@@ -10,3 +10,4 @@ commands:
   help: commands
 timezone: +0300
 lang: ru
+database: db.db
