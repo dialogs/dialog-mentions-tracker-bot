@@ -1,10 +1,10 @@
 en:
   phrases:
     start: Tracking start.
-    already: I'm already tracking yours mentions.
+    already: I'm already tracking your mentions.
     stop: Tracking stop.
-    not tracking: I'm not tracking yours mentions.
-    not tracking opt: I'm not tracking yours mentions. Send "{}" to start tracking.
+    not tracking: I'm not tracking your mentions.
+    not tracking opt: I'm not tracking your mentions. Send "{}" to start tracking.
     set time: "Set reminder time:"
     unknown: Unknown command. Send "{}" to get a list of commands.
     commands: |
@@ -18,8 +18,8 @@ en:
     start group: Start tracking group {} for you.
     already group: Group already track.
     stop group: Stop tracking group {} for you.
-    not trackind group: I'm not tracking yours mentions in {}.
-    remind: I will remind you of yours mentions at {} every day.
+    not trackind group: I'm not tracking your mentions in {}.
+    remind: I will remind you of your mentions at {} every day.
   media:
     start: Start
     stop: Stop

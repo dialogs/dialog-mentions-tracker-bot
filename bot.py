@@ -15,6 +15,7 @@ from Users import User
 HOURS = {}
 MINUTES = {}
 GROUPS_MEMBERS_FETCH_LIMIT = 1000
+CRON_TIME = 60
 PHRASES = 'phrases.phrases'
 MEDIA = 'phrases.media'
 LOCALES = ['en', 'ru']
@@ -41,13 +42,13 @@ class Bot:
         self.tracked_users = {}
         self.default_tracked_groups = {}
         self.reminder = {}
-        self.cron_time = 60
+        self.cron_time = CRON_TIME
 
     def cron(self):
         ticker = threading.Event()
         while not ticker.wait(self.cron_time):
             t = datetime.utcnow()
-            self.cron_time = 60 - int(t.strftime("%S"))
+            self.cron_time = CRON_TIME - int(t.strftime("%S"))
             time = t.strftime("%H:%M")
             if time in self.reminder:
                 for uid in self.reminder[time]:
