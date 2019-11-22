@@ -1,0 +1,31 @@
+en:
+  phrases:
+    start: Tracking start.
+    already: I'm already tracking your mentions.
+    stop: Tracking stop.
+    not tracking: I'm not tracking your mentions.
+    not tracking opt: I'm not tracking your mentions. Send "{}" to start tracking.
+    set time: "Set reminder time:"
+    unknown: Unknown command. Send "{}" to get a list of commands.
+    commands: |
+      "{0}": subscribe on tracking your mentions,
+      "{1}": unsubscribe your tracking,
+      "{2}": get your mentions since "{0}" or last reminder or last used this option,
+      "{3}": set reminder which will remind about your mentions every day in due time,
+      "{4}": get groups to which I am subscribed for you can subscribe/unsubscribe on them.
+    no mentions: You have not mentions.
+    oops: Oops. You unsubscribed on tracking mentions. Send "{}" for subscribe.
+    start group: Start tracking group {} for you.
+    already group: Group already track.
+    stop group: Stop tracking group {} for you.
+    not trackind group: I'm not tracking your mentions in {}.
+    remind: I will remind you of your mentions at {} every day.
+  media:
+    start: Start
+    stop: Stop
+    hours: hours
+    minutes: minutes
+    start tracking: Start tracking
+    stop tracking: Stop tracking
+    hour: Hour
+    minute: Minute
